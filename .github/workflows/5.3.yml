@@ -1,62 +1,44 @@
-name: Build APK 5.3
+name: M-Fayed Studio 5.3 APK
 
-on:
-workflow_dispatch:
-push:
-branches: [main, master]
+on: [push, workflow_dispatch]
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: 20
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-  - name: Setup Java
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: 17
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-  - name: Install dependencies
-    run: npm install
+      - name: Install dependencies
+        run: npm install
 
-  - name: Prepare Quran and backgrounds
-    run: |
-      node scripts/make-quran.js || echo "Quran download skipped"
-      node scripts/make-bg-list.js
+      - name: Setup Capacitor Android
+        run: npx cap add android
 
-  - name: Add Android
-    run: npx cap add android
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-  - name: Copy native files and icons
-    run: |
-      D=android/app/src/main/java/com/mfayed/studio
-      mkdir -p "$D"
-      cp native/*.java "$D/"
-      cp -r icons-res/* android/app/src/main/res/
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-  - name: Add permissions
-    run: |
-      sed -i 's#<application#<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />\n    <application#' android/app/src/main/AndroidManifest.xml
-
-  - name: Sync Android
-    run: npx cap sync android
-
-  - name: Build APK
-    run: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: M-Fayed-Studio-5.3-APK
-      path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: M-Fayed-Studio-5.3-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
