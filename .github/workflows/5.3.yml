@@ -1,20 +1,41 @@
 name: M-Fayed Studio 5.3 APK
 
-on: [push, workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Locate project
+        run: |
+          if [ ! -f package.json ]; then
+            ZIP=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+            if [ -n "$ZIP" ]; then
+              mkdir -p extracted
+              unzip -oq "$ZIP" -d extracted
+            fi
+          fi
+
+          PKG=$(find . -name package.json -not -path '*/node_modules/*' | head -n 1)
+
+          if [ -z "$PKG" ]; then
+            echo "ERROR: package.json not found"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$(dirname "$PKG")" >> $GITHUB_ENV
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -24,21 +45,39 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: Setup Capacitor Android
+      - name: Prepare files
+        run: |
+          node scripts/make-quran.js || true
+          node scripts/make-bg-list.js
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Add Android
         run: npx cap add android
+        working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: Sync Capacitor
+      - name: Copy native files
+        run: |
+          D=android/app/src/main/java/com/mfayed/studio
+          mkdir -p "$D"
+          cp native/*.java "$D/"
+          cp -r icons-res/* android/app/src/main/res/
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Sync Android
         run: npx cap sync android
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: M-Fayed-Studio-5.3-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
